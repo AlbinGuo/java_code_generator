@@ -3,3 +3,4 @@
 
 使用命令:
 java -jar ezjs_generator.jar -...
+![avatar](/01.png)
