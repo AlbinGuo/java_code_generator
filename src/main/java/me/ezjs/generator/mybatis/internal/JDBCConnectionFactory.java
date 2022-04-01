@@ -1,0 +1,125 @@
+/**
+ * Copyright 2006-2016 the original author or authors.
+ * <p>
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package me.ezjs.generator.mybatis.internal;
+
+import static me.ezjs.generator.mybatis.internal.util.StringUtility.stringHasValue;
+import static me.ezjs.generator.mybatis.internal.util.messages.Messages.getString;
+
+import java.sql.Connection;
+import java.sql.Driver;
+import java.sql.SQLException;
+import java.util.Properties;
+
+import me.ezjs.generator.mybatis.api.ConnectionFactory;
+import me.ezjs.generator.mybatis.config.JDBCConnectionConfiguration;
+import me.ezjs.generator.mybatis.internal.util.messages.Messages;
+
+/**
+ * This class assumes that classes are cached elsewhere for performance reasons,
+ * but also to make sure that any native libraries are only loaded one time
+ * (avoids the dreaded UnsatisfiedLinkError library loaded in another
+ * classloader)
+ *
+ * @author Jeff Butler
+ */
+public class JDBCConnectionFactory implements ConnectionFactory {
+
+    private String userId;
+    private String password;
+    private String connectionURL;
+    private String driverClass;
+    private Properties otherProperties;
+
+    /**
+     * This constructor is called when there is a JDBCConnectionConfiguration
+     * specified in the configuration.
+     *
+     * @param config
+     */
+    public JDBCConnectionFactory(JDBCConnectionConfiguration config) {
+        super();
+        userId = config.getUserId();
+        password = config.getPassword();
+        connectionURL = config.getConnectionURL();
+        driverClass = config.getDriverClass();
+        otherProperties = config.getProperties();
+    }
+
+    /**
+     * This constructor is called when this connection factory is specified 
+     * as the type in a ConnectionFactory configuration element. 
+     */
+    public JDBCConnectionFactory() {
+        super();
+    }
+
+    public Connection getConnection()
+            throws SQLException {
+        Driver driver = getDriver();
+
+        Properties props = new Properties();
+
+        if (stringHasValue(userId)) {
+            props.setProperty("user", userId); //$NON-NLS-1$
+        }
+
+        if (stringHasValue(password)) {
+            props.setProperty("password", password); //$NON-NLS-1$
+        }
+
+        props.putAll(otherProperties);
+
+        Connection conn = driver.connect(connectionURL, props);
+
+        if (conn == null) {
+            throw new SQLException(Messages.getString("RuntimeError.7")); //$NON-NLS-1$
+        }
+
+        return conn;
+    }
+
+    private Driver getDriver() {
+        Driver driver;
+
+        try {
+            Class<?> clazz = ObjectFactory.externalClassForName(driverClass);
+            driver = (Driver) clazz.newInstance();
+        } catch (Exception e) {
+            throw new RuntimeException(Messages.getString("RuntimeError.8"), e); //$NON-NLS-1$
+        }
+
+        return driver;
+    }
+
+    @Override
+    public void addConfigurationProperties(Properties properties) {
+        // this should only be called when this connection factory is
+        // specified in a ConnectionFactory configuration
+        userId = properties.getProperty("userId");
+        password = properties.getProperty("password");
+        connectionURL = properties.getProperty("connectionURL");
+        driverClass = properties.getProperty("driverClass");
+
+        otherProperties = new Properties();
+        otherProperties.putAll(properties);
+
+        // remove all the properties that we have specific attributes for
+        otherProperties.remove("userId");
+        otherProperties.remove("password");
+        otherProperties.remove("connectionURL");
+        otherProperties.remove("driverClass");
+    }
+}
